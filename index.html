@@ -53,7 +53,7 @@
 
         h2 { font-size: 1.2rem; margin: 0; color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); white-space: nowrap; font-weight: 700; }
 
-        .input-group { display: flex; gap: 8px; flex: 3; min-width: 280px; flex-wrap: wrap; }
+        .input-group { display: flex; gap: 8px; flex: 3; min-width: 280px; flex-wrap: wrap; align-items: center; }
         input { 
             width: 100%; padding: 10px 15px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; 
             background: rgba(15, 23, 42, 0.6); color: #fff; font-size: 13px; font-family: 'Kanit'; outline: none; transition: 0.2s;
@@ -61,13 +61,22 @@
         input:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
         .input-group input { flex: 1; min-width: 120px; }
         #tagInput { flex: 0.8; background: rgba(56, 189, 248, 0.05); }
-        #customImgInput { flex: 1; background: rgba(245, 158, 11, 0.05); }
+        
+        .img-input-wrap { display: flex; gap: 6px; flex: 1.2; min-width: 170px; align-items: center; }
+        #customImgInput { background: rgba(245, 158, 11, 0.05); flex: 1; }
+        .upload-btn {
+            background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px dashed rgba(245, 158, 11, 0.5);
+            padding: 9px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+            white-space: nowrap; transition: 0.2s; display: flex; align-items: center; gap: 4px;
+        }
+        .upload-btn:hover { background: rgba(245, 158, 11, 0.25); color: #fff; }
 
-        .btn-group { display: flex; gap: 5px; flex-shrink: 0; }
+        .btn-group { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
         button { padding: 10px 18px; border-radius: 12px; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; font-family: 'Kanit'; font-size: 13px; }
         #addBtn { background: linear-gradient(135deg, #2563eb, #3b82f6); color: white; box-shadow: 0 0 15px rgba(37, 99, 235, 0.4); }
         #addBtn.edit-btn-active { background: linear-gradient(135deg, #d97706, #f59e0b); box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
         #clearInputBtn { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+        #cleanTiktokBtn { background: linear-gradient(135deg, #ef4444, #b91c1c); color: white; box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
 
         #searchBox { flex: 1.5; min-width: 150px; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255,255,255,0.2); }
 
@@ -128,7 +137,6 @@
         
         .badges-wrap { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
         
-        /* Animated Cyber Badges */
         .tag-label { 
             font-size: 9px; padding: 2px 8px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; 
             border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; font-weight: 600; 
@@ -230,13 +238,21 @@
         <input type="text" id="url" placeholder="URL https://... (วางลิงก์ที่นี่)">
         <input type="text" id="name" placeholder="ชื่อรายการ (ดึงให้อัตโนมัติ)">
         <input type="text" id="tagInput" placeholder="หมวดหมู่...">
-        <input type="text" id="customImgInput" placeholder="🖼️ ลิงก์รูปภาพ (เว้นได้)">
+        
+        <!-- ช่องลิงก์รูป + ปุ่มอัปโหลดไฟล์จากคอม -->
+        <div class="img-input-wrap">
+            <input type="text" id="customImgInput" placeholder="🖼️ URL รูปภาพ...">
+            <label class="upload-btn" title="เลือกรูปภาพจากเครื่องคอมพิวเตอร์">
+                📁 อัปรูป
+                <input type="file" id="localFileInput" accept="image/*" style="display: none;">
+            </label>
+        </div>
     </div>
     
-   <div class="btn-group">
+    <div class="btn-group">
         <button id="addBtn">บันทึก</button>
         <button id="clearInputBtn">ล้าง</button>
-        <button id="cleanTiktokBtn" style="background: linear-gradient(135deg, #ef4444, #b91c1c); color: white;">🧹 ตรวจ TikTok บิน/ไม่มีคลิป</button>
+        <button id="cleanTiktokBtn">🧹 ตรวจ TikTok บิน/ไม่มีคลิป</button>
     </div>
     <input type="text" id="searchBox" placeholder="🔍 ค้นหาเร็ว...">
 </div>
@@ -288,6 +304,33 @@
         t.classList.add('show');
         setTimeout(() => t.classList.remove('show'), 2000);
     };
+
+    // ตัวแปลงและบีบอัดรูปภาพจากเครื่องเป็น Base64 ขนาดเล็ก
+    document.getElementById('localFileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        showToast("⏳ กำลังแปลงรูปภาพ...");
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = 100; // ย่อขนาดรูปเหลือ 100x100px พอดีกับการแสดงไอคอน
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, size, size);
+                
+                // แปลงเป็น JPEG ความละเอียด 80% เพื่อให้ข้อความสั้นและไม่กินพื้นที่ Firestore
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                document.getElementById('customImgInput').value = base64;
+                showToast("✅ เลือกรูปจากเครื่องสำเร็จ!");
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
 
     // Auto Fetch Title
     let fetchTimer;
@@ -467,6 +510,7 @@
         document.getElementById('url').value = '';
         document.getElementById('tagInput').value = '';
         document.getElementById('customImgInput').value = '';
+        document.getElementById('localFileInput').value = '';
         
         const addBtn = document.getElementById('addBtn');
         addBtn.textContent = "บันทึก";
@@ -488,7 +532,7 @@
             const data = d.data();
             allLinks.push({ 
                 id: d.id, 
-                ...data,
+                ...data, 
                 platform: detectPlatform(data.url)
             });
         });
@@ -556,7 +600,6 @@
             card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
         });
 
-        // Touch Friendly Tilt for Mobile
         card.addEventListener('touchstart', () => {
             card.style.transform = `scale3d(0.98, 0.98, 0.98)`;
         });
@@ -584,7 +627,7 @@
             card.dataset.platform = item.platform || 'other';
             card.style.animationDelay = `${index * 0.05}s`;
 
-            apply3DTilt(card); // ใส่เอฟเฟกต์ 3D Tilt
+            apply3DTilt(card);
 
             const displayTag = (!item.tag || item.tag === "undefined") ? "ทั่วไป" : item.tag;
             const clickCount = item.clicks || 0;
@@ -681,6 +724,7 @@
         document.getElementById('url').value = item.url || '';
         document.getElementById('tagInput').value = item.tag || '';
         document.getElementById('customImgInput').value = item.iconUrl || '';
+        document.getElementById('localFileInput').value = '';
 
         const addBtn = document.getElementById('addBtn');
         addBtn.textContent = "อัปเดต";
@@ -726,6 +770,7 @@
             showToast("❌ ลบไม่สำเร็จ");
         }
     }
+
     // ฟังก์ชันตรวจสอบและลบ TikTok
     async function checkTikTokStatus(targetUrl) {
         try {
