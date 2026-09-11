@@ -232,9 +232,11 @@
         <input type="text" id="tagInput" placeholder="หมวดหมู่...">
         <input type="text" id="customImgInput" placeholder="🖼️ ลิงก์รูปภาพ (เว้นได้)">
     </div>
-    <div class="btn-group">
+    
+   <div class="btn-group">
         <button id="addBtn">บันทึก</button>
         <button id="clearInputBtn">ล้าง</button>
+        <button id="cleanTiktokBtn" style="background: linear-gradient(135deg, #ef4444, #b91c1c); color: white;">🧹 ตรวจ TikTok บิน/ไม่มีคลิป</button>
     </div>
     <input type="text" id="searchBox" placeholder="🔍 ค้นหาเร็ว...">
 </div>
@@ -724,6 +726,89 @@
             showToast("❌ ลบไม่สำเร็จ");
         }
     }
+    // ฟังก์ชันตรวจสอบและลบ TikTok
+    async function checkTikTokStatus(targetUrl) {
+        try {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+            const res = await fetch(proxyUrl);
+            const data = await res.json();
+            const html = data.contents || "";
+
+            if (!html) return { isDead: false };
+
+            if (
+                html.includes("Couldn't find this account") || 
+                html.includes("user-not-found") ||
+                html.includes("account has been suspended")
+            ) {
+                return { isDead: true, reason: "บัญชีถูกระงับ/ไม่พบผู้ใช้" };
+            }
+
+            const match = html.match(/<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>([\s\S]*?)<\/script>/);
+            if (match && match[1]) {
+                try {
+                    const parsed = JSON.parse(match[1]);
+                    const defaultScope = parsed['__DEFAULT_SCOPE__'] || {};
+                    const userDetail = defaultScope['webapp.user-detail'] || {};
+                    const stats = userDetail.userInfo?.stats;
+
+                    if (stats && typeof stats.videoCount === 'number' && stats.videoCount === 0) {
+                        return { isDead: true, reason: "ไม่มีคลิปแล้ว (0 คลิป)" };
+                    }
+                } catch (e) {
+                    /* ข้ามถ้าอ่าน JSON ไม่ได้ */
+                }
+            }
+
+            return { isDead: false };
+        } catch (err) {
+            return { isDead: false };
+        }
+    }
+
+    document.getElementById('cleanTiktokBtn').addEventListener('click', async () => {
+        const tiktokLinks = allLinks.filter(item => item.platform === 'tiktok');
+
+        if (tiktokLinks.length === 0) {
+            return showToast("⚠️ ไม่พบลิงก์ TikTok ในระบบ");
+        }
+
+        if (!confirm(`พบลิงก์ TikTok ทั้งหมด ${tiktokLinks.length} รายการ\nต้องการเริ่มสแกนและลบบัญชีที่บินหรือไม่มีคลิปหรือไม่?`)) {
+            return;
+        }
+
+        const btn = document.getElementById('cleanTiktokBtn');
+        btn.disabled = true;
+        let deadCount = 0;
+
+        for (let i = 0; i < tiktokLinks.length; i++) {
+            const item = tiktokLinks[i];
+            btn.textContent = `⏳ ตรวจ (${i + 1}/${tiktokLinks.length})...`;
+
+            const result = await checkTikTokStatus(item.url);
+
+            if (result.isDead) {
+                try {
+                    await deleteDoc(doc(db, "links", item.id));
+                    deadCount++;
+                    console.log(`[ลบสำเร็จ] ${item.name} (${result.reason})`);
+                } catch (err) {
+                    console.error("ลบไม่สำเร็จ:", err);
+                }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
+        btn.disabled = false;
+        btn.textContent = "🧹 ตรวจ TikTok บิน/ไม่มีคลิป";
+
+        if (deadCount > 0) {
+            showToast(`✨ ลบไปทั้งหมด ${deadCount} บัญชี (บิน/ไม่มีคลิป)`);
+        } else {
+            showToast("✅ บัญชี TikTok ทั้งหมดใช้งานได้ปกติ");
+        }
+    });
 </script>
 </body>
 </html>
